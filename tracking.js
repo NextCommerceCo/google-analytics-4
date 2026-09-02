@@ -79,7 +79,7 @@ if (app.settings.google_analytics_enabled && app.settings.google_analytics_measu
         // identified by the page: path as the stable id, title as the display name.
         analytics.subscribe('product_category_viewed', function (event) {
             var products = (Array.isArray(event.data) ? event.data : []).filter(function (product) {
-                return product && product.id !== undefined;
+                return product && product.id != null;
             });
             if (!products.length) { return; }
             var first = products[0].purchase_info && products[0].purchase_info.price;
@@ -93,7 +93,8 @@ if (app.settings.google_analytics_enabled && app.settings.google_analytics_measu
         });
 
         analytics.subscribe('product_viewed', function (event) {
-            var product = event.data || {};
+            var product = event.data;
+            if (!product || product.id == null) { return; }
             var price = product.purchase_info && product.purchase_info.price;
             send('event', 'view_item', {
                 currency: price && price.currency,

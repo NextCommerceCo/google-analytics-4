@@ -74,7 +74,7 @@ test('begin_checkout maps a multi-line cart with coupon and numeric value', () =
 
 test('category lists skip null entries and identify the list by path', () => {
     const { calls, emit } = boot({});
-    emit('product_category_viewed', [null, { id: 5, title: 'Sheets', purchase_info: { price: { currency: 'USD', price: '109.99' } } }]);
+    emit('product_category_viewed', [null, { id: null, title: 'Broken' }, { id: 5, title: 'Sheets', purchase_info: { price: { currency: 'USD', price: '109.99' } } }]);
     assert.equal(calls[0][2].items.length, 1);
     assert.equal(calls[0][2].item_list_id, '/c/sheets/');
 });
@@ -90,6 +90,13 @@ test('Ads conversion is skipped when the id lacks the AW- prefix', () => {
     const { calls, emit } = boot({ google_adwords_conversion_enabled: true, google_adwords_conversion_id: '123', google_adwords_conversion_label: 'abc' });
     emit('checkout_completed', checkout);
     assert.deepEqual(calls.map(c => c[1]), ['purchase']);
+});
+
+test('view_item is skipped when the payload has no id', () => {
+    const { calls, emit } = boot({});
+    emit('product_viewed', undefined);
+    emit('product_viewed', { title: 'No id' });
+    assert.equal(calls.length, 0);
 });
 
 test('view_item uses the same item identity as the cart events', () => {
