@@ -14,7 +14,7 @@ const plain = value => JSON.parse(JSON.stringify(value));
 function boot(settings, { withGtag = true } = {}) {
     const calls = [];
     const handlers = {};
-    const top = { document: { title: 'Sheets | Velin' } };
+    const top = { document: { title: 'Sheets | Velin' }, location: { pathname: '/c/sheets/' } };
     if (withGtag) top.gtag = (...args) => calls.push(args);
     const context = {
         app: { settings: { google_analytics_enabled: true, google_analytics_measurement_id: 'G-TEST', ...settings } },
@@ -57,11 +57,46 @@ test('remove_from_cart, view_item_list and add_shipping_info are mapped', () => 
     assert.equal(calls[2][2].shipping_tier, 'Express');
 });
 
+test('begin_checkout maps a multi-line cart with coupon and numeric value', () => {
+    const { calls, emit } = boot({});
+    const second = { ...line, product_id: 222, sku: 'PILLOW', product_title: 'Pillow Cover', variant_title: '', quantity: 1, price_incl_tax: '39.99', total_discount: '0.00' };
+    emit('checkout_started', { ...checkout, lines: [line, second] });
+    const [, name, params] = calls[0];
+    assert.equal(name, 'begin_checkout');
+    assert.equal(params.value, 164.97);
+    assert.equal(params.currency, 'USD');
+    assert.equal(params.coupon, 'SAVE10');
+    assert.deepEqual(plain(params.items), [
+        { item_id: '111', item_name: 'Timeless Watch', sku: 'WATCH-BL', item_variant: 'Black', price: 79.99, discount: 5, quantity: 2, index: 0 },
+        { item_id: '222', item_name: 'Pillow Cover', sku: 'PILLOW', price: 39.99, discount: 0, quantity: 1, index: 1 },
+    ]);
+});
+
+test('category lists skip null entries and identify the list by path', () => {
+    const { calls, emit } = boot({});
+    emit('product_category_viewed', [null, { id: 5, title: 'Sheets', purchase_info: { price: { currency: 'USD', price: '109.99' } } }]);
+    assert.equal(calls[0][2].items.length, 1);
+    assert.equal(calls[0][2].item_list_id, '/c/sheets/');
+});
+
+test('a missing quantity leaves unit price undefined instead of inventing one', () => {
+    const { calls, emit } = boot({});
+    emit('product_added_to_cart', { ...line, quantity: undefined });
+    assert.equal(calls[0][2].items[0].price, undefined);
+    assert.equal(calls[0][2].items[0].quantity, undefined);
+});
+
+test('Ads conversion is skipped when the id lacks the AW- prefix', () => {
+    const { calls, emit } = boot({ google_adwords_conversion_enabled: true, google_adwords_conversion_id: '123', google_adwords_conversion_label: 'abc' });
+    emit('checkout_completed', checkout);
+    assert.deepEqual(calls.map(c => c[1]), ['purchase']);
+});
+
 test('view_item uses the same item identity as the cart events', () => {
     const { calls, emit } = boot({});
-    emit('product_viewed', { id: 111, title: 'Timeless Watch', categories: [{ name: 'Watches' }], variants: [{ sku: 'WATCH-BL' }], purchase_info: { price: { currency: 'USD', price: '79.99' } } });
+    emit('product_viewed', { id: 111, title: 'Timeless Watch', categories: [{ name: 'Watches' }], variants: [{ sku: 'WATCH-BL' }, { sku: 'WATCH-BR' }], purchase_info: { price: { currency: 'USD', price: '79.99' } } });
     assert.equal(calls[0][2].items[0].item_id, '111');
-    assert.equal(calls[0][2].items[0].sku, 'WATCH-BL');
+    assert.equal(calls[0][2].items[0].sku, undefined, 'multi-variant product: viewed variant unknown, sku omitted');
     assert.equal(calls[0][2].items[0].item_category, 'Watches');
     assert.equal(calls[0][2].value, 79.99);
 });
