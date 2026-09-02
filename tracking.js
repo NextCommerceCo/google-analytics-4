@@ -1,108 +1,154 @@
-if (app.settings.google_analytics_enabled) {
+// Google Analytics 4 storefront event tracker.
+// Runs in the platform's sandboxed tracker frame; gtag lives on the storefront window (window.top),
+// installed by snippets/global-header.html. Every gtag call goes through send() so a page without the
+// snippet (no Measurement ID, or a theme without the global_header hook) never throws.
+if (app.settings.google_analytics_enabled && app.settings.google_analytics_measurement_id) {
     (function () {
-        
-        let prepareLineItems = (event) => {
-            let result = []
-            event.data?.lines?.forEach((line, _) => {
-                result.push({
-                    item_id: line.product_id,
-                    item_name: line.product_title,
-                    item_variant: line.variant_title,
-                    discount: line.total_discount,
-                    price: line.price_incl_tax,
-                    quantity: line.quantity
-                })
-            });
-            return result;
-        }
 
-        analytics.subscribe('product_viewed', (event) => {
-            window.top.gtag('event', 'view_item', {
-                currency: event.data?.purchase_info?.price?.currency,
-                value: event.data?.purchase_info?.price?.price,
-                items: [
-                    {
-                        item_id: event.data?.id,
-                        item_name: event.data?.title,
-                        sku: event.data?.sku,
-                        item_category: event.data?.categories?.length ? event.data.categories[0].name : "",
-                        price: event.data?.purchase_info?.price?.price,
-                        quantity: 1,
-                        page_path: window.top.location.pathname,
-                        page_title: window.top.document.title,
-                        page_location:  window.top.document.location.href,
-                        page_referrer: window.top.document.referrer
-                    }
-                ]
-            });
+        var settings = app.settings;
 
-        });
+        var send = function () {
+            var top = window.top;
+            if (top && typeof top.gtag === 'function') {
+                top.gtag.apply(top, arguments);
+            }
+        };
 
-        analytics.subscribe('product_added_to_cart', (event) => {
-            window.top.gtag('event', 'add_to_cart', {
-                currency: event.data?.currency,
-                value: event.data?.price_incl_tax,
-                items: [
-                    {
-                        item_id: event.data?.product_id,
-                        item_name: event.data?.product_title,
-                        sku: event.data?.sku,
-                        price: (event.data?.price_incl_tax / event.data?.quantity).toFixed(2),
-                        quantity: event.data?.quantity,
-                        page_path: window.top.location.pathname,
-                        page_title: window.top.document.title,
-                        page_location:  window.top.document.location.href,
-                        page_referrer: window.top.document.referrer
-                    }
-                ]
-            });
-        });
+        // GA4 expects numbers; the storefront payload carries decimal strings ("79.99").
+        var num = function (value) {
+            var n = parseFloat(value);
+            return isNaN(n) ? undefined : n;
+        };
 
-        analytics.subscribe('checkout_started', (event) => {
-            window.top.gtag('event', 'begin_checkout', {
-                currency: event.data?.currency,
-                value: event.data?.total_incl_tax,
-                coupon: event.data?.voucher_discounts?.length ? event.data?.voucher_discounts[0].name : "",
-                items: prepareLineItems(event),
-                page_path: window.top.location.pathname,
-                page_title: window.top.document.title,
-                page_location:  window.top.document.location.href,
-                page_referrer: window.top.document.referrer
-            });
-        });
+        var round = function (value) {
+            return value === undefined ? undefined : Math.round(value * 100) / 100;
+        };
 
-        analytics.subscribe('checkout_completed', (event) => {
-            window.top.gtag('event', 'purchase', {
-                currency: event.data?.currency,
-                value: event.data?.total_incl_tax,
-                transaction_id: event.data?.number,
-                coupon: event.data?.voucher_discounts?.length ? event.data?.voucher_discounts[0].name : "",
-                shipping: event.data?.shipping_incl_tax,
-                tax: event.data?.total_tax,
-                items: prepareLineItems(event),
-                page_path: window.top.location.pathname,
-                page_title: window.top.document.title,
-                page_location:  window.top.document.location.href,
-                page_referrer: window.top.document.referrer
+        var coupon = function (data) {
+            var vouchers = data && data.voucher_discounts;
+            return vouchers && vouchers.length ? vouchers[0].name : '';
+        };
+
+        // One item shape for the whole funnel so item-scoped reports join across events:
+        // item_id is the product id everywhere, sku and item_variant identify the child.
+        var productItem = function (product, index) {
+            var price = product && product.purchase_info && product.purchase_info.price;
+            var variants = product && product.variants;
+            var category = product && product.categories && product.categories.length ? product.categories[0].name : undefined;
+            return {
+                item_id: String(product.id),
+                item_name: product.title,
+                sku: product.sku || (variants && variants.length ? variants[0].sku : undefined),
+                item_category: category,
+                price: num(price && price.price),
+                quantity: 1,
+                index: index
+            };
+        };
+
+        var cartLineItem = function (line, index) {
+            var quantity = num(line.quantity) || 1;
+            var lineTotal = num(line.price_incl_tax);
+            var lineDiscount = num(line.total_discount);
+            return {
+                item_id: String(line.product_id),
+                item_name: line.product_title,
+                sku: line.sku || undefined,
+                item_variant: line.variant_title || undefined,
+                price: round(lineTotal === undefined ? undefined : lineTotal / quantity),
+                discount: round(lineDiscount === undefined ? undefined : lineDiscount / quantity),
+                quantity: quantity,
+                index: index
+            };
+        };
+
+        var checkoutItems = function (data) {
+            return ((data && data.lines) || []).map(cartLineItem);
+        };
+
+        var currencyOf = function (data) {
+            return data && data.currency;
+        };
+
+        analytics.subscribe('product_category_viewed', function (event) {
+            var products = Array.isArray(event.data) ? event.data : [];
+            if (!products.length) { return; }
+            var first = products[0].purchase_info && products[0].purchase_info.price;
+            send('event', 'view_item_list', {
+                item_list_name: window.top && window.top.document ? window.top.document.title : undefined,
+                currency: first && first.currency,
+                items: products.map(productItem)
             });
         });
 
-        if (app.settings.google_adwords_conversion_enabled) {
+        analytics.subscribe('product_viewed', function (event) {
+            var product = event.data || {};
+            var price = product.purchase_info && product.purchase_info.price;
+            send('event', 'view_item', {
+                currency: price && price.currency,
+                value: num(price && price.price),
+                items: [productItem(product, 0)]
+            });
+        });
 
-            analytics.subscribe('checkout_completed', (event) => {
-                adwordsAccount = app.settings.google_adwords_conversion_id + "/" + app.settings.google_adwords_conversion_label;
-                window.top.gtag('event', 'conversion', {
-                    send_to: adwordsAccount,
-                    transaction_id: event.data?.number,
-                    value: event.data?.total_tax,
-                    currency: event.data?.currency,
-                    page_path: window.top.location.pathname,
-                    page_title: window.top.document.title,
-                    page_location:  window.top.document.location.href,
-                    page_referrer: window.top.document.referrer
+        var cartLineEvent = function (name) {
+            return function (event) {
+                var line = event.data || {};
+                send('event', name, {
+                    currency: currencyOf(line),
+                    value: num(line.price_incl_tax),
+                    items: [cartLineItem(line, 0)]
                 });
+            };
+        };
+
+        analytics.subscribe('product_added_to_cart', cartLineEvent('add_to_cart'));
+        analytics.subscribe('product_removed_from_cart', cartLineEvent('remove_from_cart'));
+
+        analytics.subscribe('checkout_started', function (event) {
+            var data = event.data || {};
+            send('event', 'begin_checkout', {
+                currency: currencyOf(data),
+                value: num(data.total_incl_tax),
+                coupon: coupon(data),
+                items: checkoutItems(data)
             });
-        }
+        });
+
+        analytics.subscribe('checkout_shipping_method_submitted', function (event) {
+            var data = event.data || {};
+            send('event', 'add_shipping_info', {
+                currency: currencyOf(data),
+                value: num(data.total_incl_tax),
+                coupon: coupon(data),
+                shipping_tier: data.shipping_method || undefined,
+                items: checkoutItems(data)
+            });
+        });
+
+        analytics.subscribe('checkout_completed', function (event) {
+            var data = event.data || {};
+            if (data.is_test && settings.google_analytics_skip_test_orders) { return; }
+
+            send('event', 'purchase', {
+                currency: currencyOf(data),
+                value: num(data.total_incl_tax),
+                transaction_id: data.number,
+                coupon: coupon(data),
+                shipping: num(data.shipping_incl_tax),
+                tax: num(data.total_tax),
+                items: checkoutItems(data)
+            });
+
+            if (settings.google_adwords_conversion_enabled && settings.google_adwords_conversion_id && settings.google_adwords_conversion_label) {
+                send('event', 'conversion', {
+                    send_to: settings.google_adwords_conversion_id + '/' + settings.google_adwords_conversion_label,
+                    transaction_id: data.number,
+                    value: num(data.total_incl_tax),
+                    currency: currencyOf(data)
+                });
+            }
+        });
 
     })();
 }

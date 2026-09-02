@@ -1,4 +1,4 @@
-{% if app.settings.google_analytics_enabled %}
+{% if app.settings.google_analytics_enabled and app.settings.google_analytics_measurement_id %}
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ app.settings.google_analytics_measurement_id }}"></script>
@@ -7,10 +7,14 @@
         function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
 
-        gtag('config', '{{ app.settings.google_analytics_measurement_id }}',
-            {% if user.is_authenticated %} { 'user_id': '{{ user.pk }}' }, {% endif %}
-            {% if app.settings.google_analytics_debug_mode %} { 'debug_mode': true }, {% endif %}
-        );
+        gtag('config', '{{ app.settings.google_analytics_measurement_id }}', {
+            {% if user.is_authenticated %}'user_id': '{{ user.pk }}',{% endif %}
+            {% if app.settings.google_analytics_debug_mode %}'debug_mode': true,{% endif %}
+        });
+
+        {% if app.settings.google_adwords_conversion_enabled and app.settings.google_adwords_conversion_id %}
+        gtag('config', '{{ app.settings.google_adwords_conversion_id }}');
+        {% endif %}
     </script>
 
 {% endif %}

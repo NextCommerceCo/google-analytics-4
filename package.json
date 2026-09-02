@@ -1,0 +1,8 @@
+{
+  "name": "google-analytics-4",
+  "private": true,
+  "description": "Google Analytics 4 app for Next Commerce storefronts",
+  "scripts": {
+    "test": "node --test"
+  }
+}
