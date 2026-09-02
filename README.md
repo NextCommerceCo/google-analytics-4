@@ -42,4 +42,4 @@ Items use one shape across the funnel so GA4 item reports join: `item_id` is the
 npm test
 ```
 
-`tests/tracking.test.js` runs `tracking.js` with the same globals the platform provides (`app`, `analytics`, `window.top`) and asserts the payload of every mapped event. No dependencies; Node 20+.
+`tests/tracking.test.js` runs `tracking.js` with the same globals the platform provides (`app`, `analytics`, `window.top`) and asserts the payload of every mapped event. No dependencies; Node 22, the version CI runs.

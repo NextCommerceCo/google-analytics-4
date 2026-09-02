@@ -1,13 +1,13 @@
-{% if app.settings.google_analytics_enabled and app.settings.google_analytics_measurement_id %}
+{% if app.settings.google_analytics_enabled and app.settings.google_analytics_measurement_id.strip %}
 
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ app.settings.google_analytics_measurement_id|urlencode }}"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ app.settings.google_analytics_measurement_id.strip|urlencode }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
 
-        gtag('config', '{{ app.settings.google_analytics_measurement_id|escapejs }}', {
+        gtag('config', '{{ app.settings.google_analytics_measurement_id.strip|escapejs }}', {
             {% if user.is_authenticated %}'user_id': '{{ user.pk|escapejs }}',{% endif %}
             {% if app.settings.google_analytics_debug_mode %}'debug_mode': true,{% endif %}
         });

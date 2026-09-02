@@ -33,6 +33,17 @@ test('does nothing without a measurement id', () => {
     assert.deepEqual(Object.keys(handlers), []);
 });
 
+test('a whitespace measurement id counts as unset', () => {
+    assert.deepEqual(Object.keys(boot({ google_analytics_measurement_id: '  ' }).handlers), []);
+});
+
+test('cart events without a line payload are dropped', () => {
+    const { calls, emit } = boot({});
+    emit('product_added_to_cart', undefined);
+    emit('product_removed_from_cart', { quantity: 1 });
+    assert.equal(calls.length, 0);
+});
+
 test('never throws when gtag is missing from the storefront window', () => {
     const { emit } = boot({}, { withGtag: false });
     assert.doesNotThrow(() => emit('product_added_to_cart', line));

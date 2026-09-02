@@ -2,7 +2,8 @@
 // Runs in the platform's sandboxed tracker frame; gtag lives on the storefront window (window.top),
 // installed by snippets/global-header.html. Every gtag call goes through send() so a page without the
 // snippet (no Measurement ID, or a theme without the global_header hook) never throws.
-if (app.settings.google_analytics_enabled && app.settings.google_analytics_measurement_id) {
+// The snippet applies the same gate (.strip in the template), so both halves agree on when the app is on.
+if (app.settings.google_analytics_enabled && String(app.settings.google_analytics_measurement_id || '').trim()) {
     (function () {
 
         var settings = app.settings;
@@ -105,7 +106,8 @@ if (app.settings.google_analytics_enabled && app.settings.google_analytics_measu
 
         var cartLineEvent = function (name) {
             return function (event) {
-                var line = event.data || {};
+                var line = event.data;
+                if (!line || line.product_id == null) { return; }
                 send('event', name, {
                     currency: currencyOf(line),
                     value: num(line.price_incl_tax),
