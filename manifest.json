@@ -18,40 +18,47 @@
             "type": "text",
             "label": "Google Analytics Measurement ID",
             "default": "",
-            "help_text": "",
+            "help_text": "Your GA4 Measurement ID (G-XXXXXXXXXX). The app does nothing until this is set.",
             "required": false,
             "max_length": 250
         },
         {
             "name": "google_adwords_conversion_enabled",
             "type": "checkbox",
-            "label": "Enable Google Adwords Conversion Tracking",
-            "help_text": "",
+            "label": "Enable Google Ads Conversion Tracking",
+            "help_text": "Sends a conversion event to Google Ads when an order is completed.",
             "default": false
         },
         {
             "name": "google_adwords_conversion_id",
             "type": "text",
-            "label": "Google Adwords Conversion ID",
+            "label": "Google Ads Conversion ID",
             "default": "",
             "required": false,
-            "help_text": "Required when Google Adwords Conversion Tracking is enabled.",
+            "help_text": "Including the AW- prefix, e.g. AW-123456789. Required when Google Ads Conversion Tracking is enabled.",
             "max_length": 250
         },
         {
             "name": "google_adwords_conversion_label",
             "type": "text",
-            "label": "Google Adwords Conversion Label",
+            "label": "Google Ads Conversion Label",
             "default": "",
             "required": false,
-            "help_text": "Required when Google Adwords Conversion Tracking is enabled.",
+            "help_text": "Required when Google Ads Conversion Tracking is enabled.",
             "max_length": 250
         },
         {
             "name": "google_analytics_debug_mode",
             "type": "checkbox",
             "label": "Enable Debug Mode",
-            "help_text": "Debug mode allows you to monitor transactions in real time.",
+            "help_text": "Sends debug_mode so events appear in GA4 DebugView in real time.",
+            "default": false
+        },
+        {
+            "name": "google_analytics_skip_test_orders",
+            "type": "checkbox",
+            "label": "Skip Test Orders",
+            "help_text": "Do not send purchase or conversion events for test orders.",
             "default": false
         }
     ]

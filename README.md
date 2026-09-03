@@ -1,25 +1,45 @@
 # Google Analytics 4
 
-Google Analytics 4 app for 29 Next that integrates Google Analytics 4 into any storefront theme with [Storefront Event Tracking](https://developers.29next.com/docs/themes/event-tracking/). App also includes [Enhanced Ecommerce](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag) event tracking using the `gtag()` events.
+Google Analytics 4 app for Next Commerce. Installs the Google tag on any storefront theme and sends GA4 ecommerce events through [Storefront Event Tracking](https://developers.nextcommerce.com/docs/storefront/event-tracking). Optionally sends a Google Ads conversion on completed orders.
 
-Also includes Google Adwords Conversion tracking integration with `gtag()` conversion events.
+## Settings
 
-**Google Analytics 4**
-* [Installs Google Analytics 4](https://support.google.com/analytics/answer/9304153) globally with a setting for your Measurement ID
+| Setting | Notes |
+|---|---|
+| Enable Google Analytics | Nothing loads until a Measurement ID is also set. |
+| Google Analytics Measurement ID | `G-XXXXXXXXXX`. |
+| Enable Google Ads Conversion Tracking | The tracker configures the `AW-` tag at startup and sends a `conversion` event on `checkout_completed`. |
+| Google Ads Conversion ID | `AW-123456789`; a bare `123456789` or lower-case paste is normalised. |
+| Google Ads Conversion Label | From the Ads conversion action (letters, digits, `_`, `-`). |
+| Enable Debug Mode | Sends `debug_mode` so events show in GA4 DebugView. |
+| Skip Test Orders | Suppresses `purchase` and `conversion` for orders flagged `is_test`. |
 
+## Events
 
-**Google Ecommerce Events**
-* [Product Detail Impressions](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#view_item_details)
-* [Add to Cart](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#add_or_remove_an_item_from_a_shopping_cart)
-* [Begin Checkout](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#initiate_the_checkout_process)
-* [Purchases](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#make_a_purchase_or_issue_a_refund)
+| Storefront event | GA4 event |
+|---|---|
+| `product_category_viewed` | `view_item_list` |
+| `product_viewed` | `view_item` |
+| `product_added_to_cart` | `add_to_cart` |
+| `product_removed_from_cart` | `remove_from_cart` |
+| `checkout_started` | `begin_checkout` |
+| `checkout_shipping_method_submitted` | `add_shipping_info` |
+| `checkout_completed` | `purchase` (+ Ads `conversion` when enabled) |
 
+`page_view` is sent by the Google tag itself on `config`.
 
-**Google Adwords Conversion Tracking**
+Items share identifiers across the funnel so GA4 item reports join: `item_id` is the product id, `sku` and `item_variant` identify the child product, `price` and `discount` are per unit, and all money fields are numbers. `value` on `begin_checkout`, `add_shipping_info` and `purchase` is item revenue (the sum of the lines' `price_excl_tax`; if a payload ever lacks that field the tax-inclusive total is used, so a store seeing values that include tax should check its payloads), as GA4 defines it; `shipping` and `tax` travel in their own parameters. The Ads `conversion` value is the order total the merchant was paid. Every GA4 event carries `send_to` for the configured Measurement ID so a second Google tag on the page does not receive it.
 
-* [Google Tag for Google Ads Conversion Tracking](https://support.google.com/google-ads/answer/7548399?hl=en)
+## Files
 
+- `manifest.json` — settings schema, snippet location, event tracker mapping.
+- `snippets/global-header.html` — loads gtag and configures the GA4 tag. Rendered only when a Measurement ID is set.
+- `tracking.js` — the event tracker, which also validates the Ads settings and configures the `AW-` tag. Runs in the platform's tracker frame (a direct child of the storefront page) and calls `gtag` on the parent window; every parent access is wrapped so a page without the snippet, or an embedded storefront with a cross-origin parent, never throws.
 
-See `tracking.js` for a complete detailed view of the implementation.
+## Tests
 
-For more information on individual tracking events, see the [Storefront Theme Event Tracking guide](https://developers.29next.com/docs/themes/event-tracking/).
+```bash
+npm test
+```
+
+`tests/tracking.test.js` runs `tracking.js` with the same globals the platform provides (`app`, `analytics`, `window.parent`) and asserts the payload of every mapped event, plus the escaping in the snippet. No dependencies; Node 22, the version CI runs.

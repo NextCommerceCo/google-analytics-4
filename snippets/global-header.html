@@ -1,16 +1,18 @@
-{% if app.settings.google_analytics_enabled %}
+{% if app.settings.google_analytics_enabled and app.settings.google_analytics_measurement_id.strip %}
 
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ app.settings.google_analytics_measurement_id }}"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ app.settings.google_analytics_measurement_id.strip|urlencode }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
 
-        gtag('config', '{{ app.settings.google_analytics_measurement_id }}',
-            {% if user.is_authenticated %} { 'user_id': '{{ user.pk }}' }, {% endif %}
-            {% if app.settings.google_analytics_debug_mode %} { 'debug_mode': true }, {% endif %}
-        );
+        gtag('config', '{{ app.settings.google_analytics_measurement_id.strip|escapejs }}', {
+            {% if user.is_authenticated %}'user_id': '{{ user.pk|escapejs }}',{% endif %}
+            {% if app.settings.google_analytics_debug_mode %}'debug_mode': true,{% endif %}
+        });
+
+        {# The Google Ads tag is configured by tracking.js, which validates and normalises the id and label in one place. #}
     </script>
 
 {% endif %}
