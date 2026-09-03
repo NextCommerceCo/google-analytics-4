@@ -122,7 +122,7 @@ test('view_item_list skips invalid entries, identifies the list by path, caps at
     assert.equal(params.items.length, 200);
     assert.equal(params.item_list_id, '/c/sheets/');
     assert.equal(params.item_list_name, 'Sheets | Velin');
-    assert.equal(params.currency, undefined, 'no priced product within the first 200');
+    assert.equal(params.currency, 'USD', 'currency is taken before truncation');
     const { calls: c2, emit: e2 } = boot({});
     e2('product_category_viewed', [{ id: 5, title: 'Unpriced' }, { id: 9, title: 'Sheets', purchase_info: { price: { currency: 'EUR', price: '99.00' } } }]);
     assert.equal(c2[0][2].currency, 'EUR');

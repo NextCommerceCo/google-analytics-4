@@ -75,7 +75,8 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             return vouchers && vouchers.length ? vouchers[0].name : undefined;
         };
 
-        // GA4 caps an event at 200 items; over-limit events are dropped, not truncated.
+        // GA4 rejects an event with more than 200 items outright, so longer lists are truncated
+        // to the first 200: a partial list still reaches the report, a dropped event does not.
         var MAX_ITEMS = 200;
 
         // One item shape for the whole funnel so item-scoped reports join across events:
@@ -154,11 +155,13 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
         analytics.subscribe('product_category_viewed', function (event) {
             var products = (Array.isArray(event.data) ? event.data : []).filter(function (product) {
                 return product && product.id != null;
-            }).slice(0, MAX_ITEMS);
+            });
             if (!products.length) { return; }
+            // Currency comes from the first priced product in the whole list, before truncation.
             var priced = products.filter(function (product) {
                 return product.purchase_info && product.purchase_info.price;
             })[0];
+            products = products.slice(0, MAX_ITEMS);
             var page = pageContext();
             sendGa('view_item_list', {
                 item_list_id: page.path,
