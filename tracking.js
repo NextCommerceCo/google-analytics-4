@@ -98,10 +98,12 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             };
         };
 
-        // Line totals exclude tax where the payload offers it: tax is reported in its own
-        // parameter, so a tax-inclusive price would count it twice. Unit price/discount are
-        // derived from line totals; when the payload has no positive quantity they are left
-        // undefined rather than invented.
+        // Line totals exclude tax: tax is reported in its own parameter, so a tax-inclusive
+        // price would count it twice. The platform sends price_excl_tax on every cart and order
+        // line; the price_incl_tax fallback only fires when a payload is missing the field
+        // outright (a value of 0 is a real free line and is kept). Unit price and discount are
+        // derived from the line totals; when the payload has no positive quantity they are left
+        // undefined rather than invented. discount is the platform's total_discount as sent.
         var lineTotal = function (line) {
             var excl = num(line.price_excl_tax);
             return excl === undefined ? num(line.price_incl_tax) : excl;
