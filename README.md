@@ -28,7 +28,7 @@ Google Analytics 4 app for Next Commerce. Installs the Google tag on any storefr
 
 `page_view` is sent by the Google tag itself on `config`.
 
-Items share identifiers across the funnel so GA4 item reports join: `item_id` is the product id, `sku` and `item_variant` identify the child product, `price` and `discount` are per unit, and all money fields are numbers. `value` on `begin_checkout`, `add_shipping_info` and `purchase` is item revenue (the sum of the lines), as GA4 defines it; `shipping` and `tax` travel in their own parameters. The Ads `conversion` value is the order total the merchant was paid. Every GA4 event carries `send_to` for the configured Measurement ID so a second Google tag on the page does not receive it.
+Items share identifiers across the funnel so GA4 item reports join: `item_id` is the product id, `sku` and `item_variant` identify the child product, `price` and `discount` are per unit, and all money fields are numbers. `value` on `begin_checkout`, `add_shipping_info` and `purchase` is item revenue (the sum of the lines, excluding tax where the payload provides `price_excl_tax`), as GA4 defines it; `shipping` and `tax` travel in their own parameters. The Ads `conversion` value is the order total the merchant was paid. Every GA4 event carries `send_to` for the configured Measurement ID so a second Google tag on the page does not receive it.
 
 ## Files
 

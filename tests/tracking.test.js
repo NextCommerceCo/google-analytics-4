@@ -27,9 +27,9 @@ function boot(settings, { parent } = {}) {
 }
 
 const names = calls => calls.map(c => c[1]);
-const line = { currency: 'USD', product_id: 111, sku: 'WATCH-BL', product_title: 'Timeless Watch', variant_title: 'Black', quantity: 2, price_incl_tax: '159.98', total_discount: '10.00', is_upsell: false };
-const second = { ...line, product_id: 222, sku: 'PILLOW', product_title: 'Pillow Cover', variant_title: '', quantity: 1, price_incl_tax: '39.99', total_discount: '0.00' };
-const checkout = { number: '109659', currency: 'USD', total_incl_tax: '204.96', shipping_incl_tax: '4.99', total_tax: '0.00', shipping_method: 'Express', voucher_discounts: [{ name: 'SAVE10' }], lines: [line, second], is_test: false };
+const line = { currency: 'USD', product_id: 111, sku: 'WATCH-BL', product_title: 'Timeless Watch', variant_title: 'Black', quantity: 2, price_excl_tax: '159.98', price_incl_tax: '171.18', total_discount: '10.00', is_upsell: false };
+const second = { ...line, product_id: 222, sku: 'PILLOW', product_title: 'Pillow Cover', variant_title: '', quantity: 1, price_excl_tax: '39.99', price_incl_tax: '42.79', total_discount: '0.00' };
+const checkout = { number: '109659', currency: 'USD', total_incl_tax: '218.96', shipping_incl_tax: '4.99', total_tax: '14.00', shipping_method: 'Express', voucher_discounts: [{ name: 'SAVE10' }], lines: [line, second], is_test: false };
 const product = { id: 111, title: 'Timeless Watch', categories: [{ name: 'Watches' }], variants: [{ sku: 'WATCH-BL' }], purchase_info: { price: { currency: 'USD', price: '79.99' } } };
 
 test('the tracker stays off when disabled or when the measurement id is empty, whitespace or missing', () => {
@@ -80,8 +80,8 @@ test('unit price guards zero, negative, string and non-numeric inputs', () => {
     const { calls, emit } = boot({});
     emit('product_added_to_cart', { ...line, quantity: 0 });
     emit('product_added_to_cart', { ...line, quantity: -1 });
-    emit('product_added_to_cart', { ...line, quantity: '3', price_incl_tax: '10.00', total_discount: '1.00' });
-    emit('product_added_to_cart', { ...line, quantity: undefined, price_incl_tax: 'abc' });
+    emit('product_added_to_cart', { ...line, quantity: '3', price_excl_tax: '10.00', price_incl_tax: '10.70', total_discount: '1.00' });
+    emit('product_added_to_cart', { ...line, quantity: undefined, price_excl_tax: undefined, price_incl_tax: 'abc' });
     assert.deepEqual(plain(calls[0][2].items[0]), { item_id: '111', item_name: 'Timeless Watch', sku: 'WATCH-BL', item_variant: 'Black', quantity: 0, index: 0 });
     assert.equal(calls[1][2].items[0].price, undefined);
     assert.deepEqual(plain(calls[2][2].items[0]), { item_id: '111', item_name: 'Timeless Watch', sku: 'WATCH-BL', item_variant: 'Black', price: 3.33, discount: 0.33, quantity: 3, index: 0 });
@@ -169,9 +169,9 @@ test('purchase reconciles to its items and carries shipping and tax separately; 
     assert.equal(purchase.value, 199.97);
     assert.equal(purchase.value, purchase.items.reduce((sum, i) => sum + i.price * i.quantity, 0));
     assert.equal(purchase.shipping, 4.99);
-    assert.equal(purchase.tax, 0);
+    assert.equal(purchase.tax, 14);
     assert.equal(purchase.coupon, 'SAVE10');
-    assert.deepEqual(plain(conversion), { send_to: 'AW-123/abc', transaction_id: '109659', value: 204.96, currency: 'USD' });
+    assert.deepEqual(plain(conversion), { send_to: 'AW-123/abc', transaction_id: '109659', value: 218.96, currency: 'USD' });
 });
 
 test('the Ads destination is configured once at startup only when the settings validate', () => {
