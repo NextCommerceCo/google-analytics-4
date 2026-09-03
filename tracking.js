@@ -12,13 +12,18 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
         var settings = app.settings;
         var measurementId = String(settings.google_analytics_measurement_id).trim();
 
-        // Google Ads ids are normalised the same way the snippet does it (strip, upper-case,
-        // accept a bare numeric id by adding the AW- prefix) so a bare or lower-case paste keeps working.
+        // Google Ads settings are normalised and validated here only; the snippet does not touch
+        // them (a Django template cannot mirror this regex). A bare numeric id gets the AW- prefix
+        // so an older paste keeps working; labels are the alphanumeric/_/- tokens Ads issues.
         var adsId = (function () {
             var raw = String(settings.google_adwords_conversion_id || '').trim().toUpperCase().replace(/^AW-/, '');
             return /^\d+$/.test(raw) ? 'AW-' + raw : '';
         })();
-        var adsLabel = String(settings.google_adwords_conversion_label || '').trim();
+        var adsLabel = (function () {
+            var raw = String(settings.google_adwords_conversion_label || '').trim();
+            return /^[A-Za-z0-9_-]+$/.test(raw) ? raw : '';
+        })();
+        var adsEnabled = Boolean(settings.google_adwords_conversion_enabled && adsId && adsLabel);
 
         var storefront = function () {
             try {
@@ -48,6 +53,12 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             params.send_to = measurementId;
             send('event', name, params);
         };
+
+        // Ads conversion tracking needs the AW- destination configured before send_to can attribute.
+        // gtag queues calls until gtag.js loads, and this runs before any storefront event fires.
+        if (adsEnabled) {
+            send('config', adsId);
+        }
 
         // GA4 expects numbers; the storefront payload carries decimal strings ("79.99").
         var num = function (value) {
@@ -207,7 +218,7 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             sendGa('purchase', params);
 
             // The Ads conversion value is the order total the merchant was paid, by design.
-            if (settings.google_adwords_conversion_enabled && adsId && adsLabel) {
+            if (adsEnabled) {
                 send('event', 'conversion', {
                     send_to: adsId + '/' + adsLabel,
                     transaction_id: data.number,

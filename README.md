@@ -8,9 +8,9 @@ Google Analytics 4 app for Next Commerce. Installs the Google tag on any storefr
 |---|---|
 | Enable Google Analytics | Nothing loads until a Measurement ID is also set. |
 | Google Analytics Measurement ID | `G-XXXXXXXXXX`. |
-| Enable Google Ads Conversion Tracking | Configures the `AW-` tag and sends a `conversion` event on `checkout_completed`. |
+| Enable Google Ads Conversion Tracking | The tracker configures the `AW-` tag at startup and sends a `conversion` event on `checkout_completed`. |
 | Google Ads Conversion ID | `AW-123456789`; a bare `123456789` or lower-case paste is normalised. |
-| Google Ads Conversion Label | From the Ads conversion action. |
+| Google Ads Conversion Label | From the Ads conversion action (letters, digits, `_`, `-`). |
 | Enable Debug Mode | Sends `debug_mode` so events show in GA4 DebugView. |
 | Skip Test Orders | Suppresses `purchase` and `conversion` for orders flagged `is_test`. |
 
@@ -33,8 +33,8 @@ Items share identifiers across the funnel so GA4 item reports join: `item_id` is
 ## Files
 
 - `manifest.json` — settings schema, snippet location, event tracker mapping.
-- `snippets/global-header.html` — loads gtag and configures the GA4 (and optional Ads) tag. Rendered only when a Measurement ID is set.
-- `tracking.js` — the event tracker. Runs in the platform's tracker frame (a direct child of the storefront page) and calls `gtag` on the parent window; every parent access is wrapped so a page without the snippet, or an embedded storefront with a cross-origin parent, never throws.
+- `snippets/global-header.html` — loads gtag and configures the GA4 tag. Rendered only when a Measurement ID is set.
+- `tracking.js` — the event tracker, which also validates the Ads settings and configures the `AW-` tag. Runs in the platform's tracker frame (a direct child of the storefront page) and calls `gtag` on the parent window; every parent access is wrapped so a page without the snippet, or an embedded storefront with a cross-origin parent, never throws.
 
 ## Tests
 

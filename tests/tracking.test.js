@@ -174,8 +174,19 @@ test('purchase reconciles to its items and carries shipping and tax separately; 
     assert.deepEqual(plain(conversion), { send_to: 'AW-123/abc', transaction_id: '109659', value: 204.96, currency: 'USD' });
 });
 
-test('Ads conversion needs the checkbox, a numeric id (bare, prefixed, spaced or lower-case) and a label', () => {
+test('the Ads destination is configured once at startup only when the settings validate', () => {
+    const on = boot({ google_adwords_conversion_enabled: true, google_adwords_conversion_id: ' aw-123 ', google_adwords_conversion_label: 'abc' });
+    assert.deepEqual(on.calls, [['config', 'AW-123']]);
+    for (const settings of [{}, { google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'AW-123' }, { google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'aw123', google_adwords_conversion_label: 'abc' }, { google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'aw-123-aw-456', google_adwords_conversion_label: 'abc' }]) {
+        assert.equal(boot(settings).calls.length, 0, JSON.stringify(settings));
+    }
+});
+
+test('Ads conversion needs the checkbox, a numeric id (bare, prefixed, spaced or lower-case) and a well-formed label', () => {
     const cases = [
+        [{ google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'AW-123', google_adwords_conversion_label: 'Abc/Def' }, null],
+        [{ google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'AW-123', google_adwords_conversion_label: "ab'c" }, null],
+        [{ google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'AW-123', google_adwords_conversion_label: 'AbC_d-9' }, 'AW-123/AbC_d-9'],
         [{ google_adwords_conversion_enabled: false, google_adwords_conversion_id: 'AW-123', google_adwords_conversion_label: 'abc' }, null],
         [{ google_adwords_conversion_enabled: true, google_adwords_conversion_id: 'AW-123' }, null],
         [{ google_adwords_conversion_enabled: true, google_adwords_conversion_id: undefined, google_adwords_conversion_label: 'abc' }, null],
@@ -205,8 +216,8 @@ test('test orders are skipped only when the setting is on', () => {
 test('every template interpolation inside the snippet script block is escaped, and the gates match the tracker', () => {
     const html = fs.readFileSync(path.join(__dirname, '..', 'snippets', 'global-header.html'), 'utf8');
     assert.match(html.split('\n')[0], /google_analytics_enabled and app\.settings\.google_analytics_measurement_id\.strip/);
-    assert.match(html, /google_adwords_conversion_id\.strip and app\.settings\.google_adwords_conversion_label\.strip/);
+    assert.doesNotMatch(html, /adwords/, 'Ads settings are handled by tracking.js only');
     const interpolations = [...html.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)].map(m => m[1]);
-    assert.ok(interpolations.length >= 4);
+    assert.ok(interpolations.length >= 3);
     for (const expr of interpolations) assert.match(expr, /\|(escapejs|urlencode)$/, `unescaped interpolation: ${expr}`);
 });
