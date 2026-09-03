@@ -12,8 +12,9 @@
             {% if app.settings.google_analytics_debug_mode %}'debug_mode': true,{% endif %}
         });
 
-        {% if app.settings.google_adwords_conversion_enabled and app.settings.google_adwords_conversion_id %}
-        gtag('config', '{{ app.settings.google_adwords_conversion_id|escapejs }}');
+        {# Same normalisation as tracking.js: strip, upper-case, and accept a bare numeric id by adding the AW- prefix. #}
+        {% if app.settings.google_adwords_conversion_enabled and app.settings.google_adwords_conversion_id.strip and app.settings.google_adwords_conversion_label.strip %}
+        gtag('config', 'AW-{{ app.settings.google_adwords_conversion_id.strip|upper|cut:"AW-"|escapejs }}');
         {% endif %}
     </script>
 

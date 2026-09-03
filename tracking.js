@@ -1,18 +1,52 @@
 // Google Analytics 4 storefront event tracker.
-// Runs in the platform's sandboxed tracker frame; gtag lives on the storefront window (window.top),
-// installed by snippets/global-header.html. Every gtag call goes through send() so a page without the
-// snippet (no Measurement ID, or a theme without the global_header hook) never throws.
-// The snippet applies the same gate (.strip in the template), so both halves agree on when the app is on.
+//
+// The platform runs this file inside an iframe that is a direct child of the storefront page.
+// gtag is installed on that parent window by snippets/global-header.html. Every access to the
+// parent goes through storefront() and send(), both wrapped in try/catch: when the storefront is
+// itself embedded (theme preview, a landing page framing the store) the parent chain can be
+// cross-origin and any property read throws. The snippet applies the same enable gate
+// (.strip in the template), so both halves agree on when the app is on.
 if (app.settings.google_analytics_enabled && String(app.settings.google_analytics_measurement_id || '').trim()) {
     (function () {
 
         var settings = app.settings;
+        var measurementId = String(settings.google_analytics_measurement_id).trim();
+
+        // Google Ads ids are normalised the same way the snippet does it (strip, upper-case,
+        // accept a bare numeric id by adding the AW- prefix) so a bare or lower-case paste keeps working.
+        var adsId = (function () {
+            var raw = String(settings.google_adwords_conversion_id || '').trim().toUpperCase().replace(/^AW-/, '');
+            return /^\d+$/.test(raw) ? 'AW-' + raw : '';
+        })();
+        var adsLabel = String(settings.google_adwords_conversion_label || '').trim();
+
+        var storefront = function () {
+            try {
+                var parent = window.parent;
+                // Touch a property so a cross-origin parent fails here, inside the try.
+                void parent.document;
+                return parent;
+            } catch (e) {
+                return null;
+            }
+        };
 
         var send = function () {
-            var top = window.top;
-            if (top && typeof top.gtag === 'function') {
-                top.gtag.apply(top, arguments);
+            try {
+                var win = storefront();
+                if (win && typeof win.gtag === 'function') {
+                    win.gtag.apply(win, arguments);
+                }
+            } catch (e) {
+                // A page without the snippet, or a cross-origin parent, must never break the tracker.
             }
+        };
+
+        // Every GA4 event targets the configured property so a second Google tag on the page
+        // (theme, another app) does not also receive it.
+        var sendGa = function (name, params) {
+            params.send_to = measurementId;
+            send('event', name, params);
         };
 
         // GA4 expects numbers; the storefront payload carries decimal strings ("79.99").
@@ -27,8 +61,11 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
 
         var coupon = function (data) {
             var vouchers = data && data.voucher_discounts;
-            return vouchers && vouchers.length ? vouchers[0].name : '';
+            return vouchers && vouchers.length ? vouchers[0].name : undefined;
         };
+
+        // GA4 caps an event at 200 items; over-limit events are dropped, not truncated.
+        var MAX_ITEMS = 200;
 
         // One item shape for the whole funnel so item-scoped reports join across events:
         // item_id is the product id everywhere, sku and item_variant identify the child.
@@ -68,12 +105,37 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             };
         };
 
-        var checkoutItems = function (data) {
-            return ((data && data.lines) || []).map(cartLineItem);
+        var checkoutLines = function (data) {
+            return ((data && data.lines) || []).filter(function (line) {
+                return line && line.product_id != null;
+            }).slice(0, MAX_ITEMS);
         };
 
-        var currencyOf = function (data) {
-            return data && data.currency;
+        // GA4 defines value on checkout events as item revenue (sum of price x quantity);
+        // shipping and tax travel in their own parameters. total_incl_tax is the order grand
+        // total, so value is rebuilt from the lines.
+        var checkoutEcommerce = function (data) {
+            var lines = checkoutLines(data);
+            var value;
+            lines.forEach(function (line) {
+                var total = num(line.price_incl_tax);
+                if (total !== undefined) { value = (value || 0) + total; }
+            });
+            return {
+                currency: data.currency,
+                value: round(value),
+                coupon: coupon(data),
+                items: lines.map(cartLineItem)
+            };
+        };
+
+        var pageContext = function () {
+            try {
+                var win = storefront();
+                return win ? { path: win.location.pathname, title: win.document.title } : {};
+            } catch (e) {
+                return {};
+            }
         };
 
         // The category payload carries the products only (no category object), so the list is
@@ -81,14 +143,16 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
         analytics.subscribe('product_category_viewed', function (event) {
             var products = (Array.isArray(event.data) ? event.data : []).filter(function (product) {
                 return product && product.id != null;
-            });
+            }).slice(0, MAX_ITEMS);
             if (!products.length) { return; }
-            var first = products[0].purchase_info && products[0].purchase_info.price;
-            var top = window.top || {};
-            send('event', 'view_item_list', {
-                item_list_id: top.location ? top.location.pathname : undefined,
-                item_list_name: top.document ? top.document.title : undefined,
-                currency: first && first.currency,
+            var priced = products.filter(function (product) {
+                return product.purchase_info && product.purchase_info.price;
+            })[0];
+            var page = pageContext();
+            sendGa('view_item_list', {
+                item_list_id: page.path,
+                item_list_name: page.title,
+                currency: priced && priced.purchase_info.price.currency,
                 items: products.map(productItem)
             });
         });
@@ -97,7 +161,7 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             var product = event.data;
             if (!product || product.id == null) { return; }
             var price = product.purchase_info && product.purchase_info.price;
-            send('event', 'view_item', {
+            sendGa('view_item', {
                 currency: price && price.currency,
                 value: num(price && price.price),
                 items: [productItem(product, 0)]
@@ -108,8 +172,8 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
             return function (event) {
                 var line = event.data;
                 if (!line || line.product_id == null) { return; }
-                send('event', name, {
-                    currency: currencyOf(line),
+                sendGa(name, {
+                    currency: line.currency,
                     value: num(line.price_incl_tax),
                     items: [cartLineItem(line, 0)]
                 });
@@ -120,47 +184,35 @@ if (app.settings.google_analytics_enabled && String(app.settings.google_analytic
         analytics.subscribe('product_removed_from_cart', cartLineEvent('remove_from_cart'));
 
         analytics.subscribe('checkout_started', function (event) {
-            var data = event.data || {};
-            send('event', 'begin_checkout', {
-                currency: currencyOf(data),
-                value: num(data.total_incl_tax),
-                coupon: coupon(data),
-                items: checkoutItems(data)
-            });
+            if (!event.data) { return; }
+            sendGa('begin_checkout', checkoutEcommerce(event.data));
         });
 
         analytics.subscribe('checkout_shipping_method_submitted', function (event) {
-            var data = event.data || {};
-            send('event', 'add_shipping_info', {
-                currency: currencyOf(data),
-                value: num(data.total_incl_tax),
-                coupon: coupon(data),
-                shipping_tier: data.shipping_method || undefined,
-                items: checkoutItems(data)
-            });
+            if (!event.data) { return; }
+            var params = checkoutEcommerce(event.data);
+            params.shipping_tier = event.data.shipping_method || undefined;
+            sendGa('add_shipping_info', params);
         });
 
         analytics.subscribe('checkout_completed', function (event) {
-            var data = event.data || {};
+            var data = event.data;
+            if (!data) { return; }
             if (data.is_test && settings.google_analytics_skip_test_orders) { return; }
 
-            send('event', 'purchase', {
-                currency: currencyOf(data),
-                value: num(data.total_incl_tax),
-                transaction_id: data.number,
-                coupon: coupon(data),
-                shipping: num(data.shipping_incl_tax),
-                tax: num(data.total_tax),
-                items: checkoutItems(data)
-            });
+            var params = checkoutEcommerce(data);
+            params.transaction_id = data.number;
+            params.shipping = num(data.shipping_incl_tax);
+            params.tax = num(data.total_tax);
+            sendGa('purchase', params);
 
-            // send_to needs the AW- form; a bare numeric id would fail silently in Ads.
-            if (settings.google_adwords_conversion_enabled && /^AW-\d+$/.test(settings.google_adwords_conversion_id || '') && settings.google_adwords_conversion_label) {
+            // The Ads conversion value is the order total the merchant was paid, by design.
+            if (settings.google_adwords_conversion_enabled && adsId && adsLabel) {
                 send('event', 'conversion', {
-                    send_to: settings.google_adwords_conversion_id + '/' + settings.google_adwords_conversion_label,
+                    send_to: adsId + '/' + adsLabel,
                     transaction_id: data.number,
                     value: num(data.total_incl_tax),
-                    currency: currencyOf(data)
+                    currency: data.currency
                 });
             }
         });
