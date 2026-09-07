@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.8] - 2026-09-03
 
 - Google Ads conversions now send the order total as the value (was the tax) and the `AW-` tag is configured by the tracker, so `send_to` can attribute (#2).
 - The snippet and tracker are gated on a non-empty Measurement ID; a store that only ticks "Enable" no longer loads `gtag/js?id=` (#3). Tracker calls are guarded so a page without the snippet never throws.
